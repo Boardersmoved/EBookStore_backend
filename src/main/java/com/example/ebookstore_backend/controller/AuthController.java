@@ -6,11 +6,17 @@ import com.example.ebookstore_backend.dto.RegisterRequestDto;
 import com.example.ebookstore_backend.dto.UserDto;
 import com.example.ebookstore_backend.entity.User;
 import com.example.ebookstore_backend.service.AuthService;
+import com.example.ebookstore_backend.service.SessionTimerService;
 import jakarta.servlet.http.HttpServletRequest; // 用于登出
 import jakarta.servlet.http.HttpServletResponse; // 用于登出
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+
+import java.util.HashMap;
+import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Scope;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -22,13 +28,16 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
+@Scope("singleton")
 public class AuthController {
 
     private final AuthService authService;
+    private final SessionTimerService sessionTimerService;
 
     @Autowired
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, SessionTimerService sessionTimerService) {
         this.authService = authService;
+        this.sessionTimerService = sessionTimerService;
     }
 
     /**
@@ -56,6 +65,8 @@ public class AuthController {
         User loggedInUser = authService.loginUser(loginRequestDto);
         SecurityContext securityContext = SecurityContextHolder.getContext();
         session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext);
+        // 登录成功后启动会话计时
+        sessionTimerService.startTimer();
 
         UserDto userDto = UserDto.fromEntity(loggedInUser);
         LoginResponseDto response = new LoginResponseDto(
@@ -97,11 +108,39 @@ public class AuthController {
     public ResponseEntity<?> logoutUser(HttpServletRequest request, HttpServletResponse response) {
         // 获取当前的认证信息
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        // 停止会话计时并获取会话时长
+        long sessionDuration = sessionTimerService.stopTimer();
         if (authentication != null) {
             // 使用Spring Security提供的处理器来执行登出操作
             // 这会清除SecurityContext，使HTTP Session无效，并清除认证相关的Cookie
             new SecurityContextLogoutHandler().logout(request, response, authentication);
         }
-        return ResponseEntity.ok("您已成功登出。");
+
+        String formattedDuration = formatDuration(sessionDuration);
+        
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("message", "您已成功登出。");
+        responseData.put("sessionDuration", sessionDuration);
+        responseData.put("formattedDuration", formattedDuration);
+        return ResponseEntity.ok(responseData);
+    }
+
+    /**
+     * 格式化时长显示
+     * @param seconds 秒数
+     * @return 格式化的时长字符串
+     */
+    private String formatDuration(long seconds) {
+        long hours = seconds / 3600;
+        long minutes = (seconds % 3600) / 60;
+        long secs = seconds % 60;
+        
+        if (hours > 0) {
+            return String.format("%d小时%d分钟%d秒", hours, minutes, secs);
+        } else if (minutes > 0) {
+            return String.format("%d分钟%d秒", minutes, secs);
+        } else {
+            return String.format("%d秒", secs);
+        }
     }
 }

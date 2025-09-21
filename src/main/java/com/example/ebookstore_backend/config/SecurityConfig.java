@@ -76,18 +76,7 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions ->
                         exceptions.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                 )
-                .logout(logout -> logout
-                        .logoutUrl("/api/auth/logout")
-                        .invalidateHttpSession(true)
-                        .deleteCookies("JSESSIONID")
-                        .logoutSuccessHandler((request, response, authentication) -> {
-                            response.setStatus(HttpStatus.OK.value());
-                            response.setContentType("application/json");
-                            response.setCharacterEncoding("UTF-8");
-                            response.getWriter().write("{\"message\": \"登出成功\"}");
-                            response.getWriter().flush();
-                        })
-                        .permitAll()
+                .logout(AbstractHttpConfigurer::disable
                 );
         return http.build();
     }
