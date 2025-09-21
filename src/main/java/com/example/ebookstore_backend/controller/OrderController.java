@@ -1,10 +1,13 @@
 package com.example.ebookstore_backend.controller;
 
-import com.example.ebookstore_backend.dto.CreateOrderRequestDto; // 使用更新后的DTO
+import com.example.ebookstore_backend.dto.CreateOrderRequestDto;
 import com.example.ebookstore_backend.dto.FlattenedOrderItemDto;
 import com.example.ebookstore_backend.dto.OrderResponseDto;
 import com.example.ebookstore_backend.dto.PayOrdersRequestDto;
+import com.example.ebookstore_backend.dto.OrderRequestMessageDto;
 import com.example.ebookstore_backend.service.OrderService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -20,7 +24,7 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -28,12 +32,70 @@ public class OrderController {
 
     private static final Logger logger = LoggerFactory.getLogger(OrderController.class);
     private final OrderService orderService;
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ObjectMapper objectMapper;
 
     @Autowired
-    public OrderController(OrderService orderService) {
+    public OrderController(OrderService orderService, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper) {
         this.orderService = orderService;
+        this.kafkaTemplate = kafkaTemplate;
+        this.objectMapper = objectMapper;
     }
 
+    /**
+     * 异步处理订单创建（使用Kafka）
+     * @param createOrderRequestDto 包含收货地址、联系电话和选中的商品项列表
+     * @return 订单请求已提交的响应
+     */
+    @PostMapping("/async")
+    public ResponseEntity<?> createOrderAsync(@Valid @RequestBody CreateOrderRequestDto createOrderRequestDto) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String currentUsername = (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getPrincipal()))
+                ? authentication.getName() : "anonymous (error if reached here for createOrderAsync)";
+        
+        logger.info("User '{}' is attempting to create an order asynchronously with {} items.", 
+                   currentUsername, createOrderRequestDto.getItems().size());
+
+        try {
+            // 生成唯一的消息ID
+            String messageId = UUID.randomUUID().toString();
+            
+            // 创建Kafka消息包装
+            OrderRequestMessageDto kafkaMessage = new OrderRequestMessageDto(
+                messageId,
+                currentUsername,
+                LocalDateTime.now(),
+                createOrderRequestDto  // 直接使用现有的DTO
+            );
+            
+            // 序列化消息
+            String messageJson = objectMapper.writeValueAsString(kafkaMessage);
+            
+            // 发送到Kafka
+            kafkaTemplate.send("order-request-topic", messageId, messageJson);
+            
+            logger.info("Order request sent to Kafka with messageId: {} for user: {}", messageId, currentUsername);
+            
+            return ResponseEntity.ok(Map.of(
+                "message", "订单请求已提交，正在异步处理中...",
+                "messageId", messageId,
+                "status", "PROCESSING"
+            ));
+            
+        } catch (JsonProcessingException e) {
+            logger.error("Failed to serialize order message for user: {}", currentUsername, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "订单请求处理失败，请稍后重试。"));
+        } catch (Exception e) {
+            logger.error("Unexpected error while processing async order for user: {}", currentUsername, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "系统错误，请稍后重试。"));
+        }
+    }
+
+    /**
+     * 获取当前用户的订单历史
+     */
     @GetMapping
     public ResponseEntity<List<OrderResponseDto>> getCurrentUserOrderHistory(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
@@ -49,6 +111,9 @@ public class OrderController {
         return ResponseEntity.ok(orderHistory);
     }
 
+    /**
+     * 管理员获取所有订单
+     */
     @GetMapping("/all")
     public ResponseEntity<List<OrderResponseDto>> getAllOrders(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
@@ -64,9 +129,7 @@ public class OrderController {
     }
 
     /**
-     * 根据前端选中的商品项创建新订单
-     * @param createOrderRequestDto 包含收货地址、联系电话和选中的商品项列表
-     * @return 创建的订单详情
+     * 同步创建订单（原有功能）
      */
     @PostMapping
     public ResponseEntity<OrderResponseDto> createOrder(@Valid @RequestBody CreateOrderRequestDto createOrderRequestDto) {
@@ -75,12 +138,10 @@ public class OrderController {
                 ? authentication.getName() : "anonymous (error if reached here for createOrder)";
         logger.info("User '{}' is attempting to create an order with selected items.", currentUsername);
 
-        OrderResponseDto createdOrder = orderService.createOrder(createOrderRequestDto); // 调用更新后的service方法
-
+        OrderResponseDto createdOrder = orderService.createOrder(createOrderRequestDto);
         logger.info("Order (ID: {}) created successfully from selected items for user '{}'.", createdOrder.getOrderId(), currentUsername);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdOrder);
     }
-
 
     /**
      * 处理支付多个订单的请求
