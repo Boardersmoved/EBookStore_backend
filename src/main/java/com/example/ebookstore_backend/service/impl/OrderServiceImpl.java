@@ -12,20 +12,19 @@ import com.example.ebookstore_backend.dao.UserDao;
 import com.example.ebookstore_backend.dao.BookDao;
 import com.example.ebookstore_backend.dao.CartItemDao;
 import com.example.ebookstore_backend.dao.OrderDao;
+import com.example.ebookstore_backend.dao.OrderItemDao;
 import com.example.ebookstore_backend.service.AuthService;
 import com.example.ebookstore_backend.service.OrderService;
 import org.aspectj.weaver.ast.Or;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,20 +32,23 @@ public class OrderServiceImpl implements OrderService {
 
     private static final Logger logger = LoggerFactory.getLogger(OrderServiceImpl.class);
 
-    private final OrderDao orderDao;
+    private final OrderDao orderDao;           // 专门处理Order表操作
+    private final OrderItemDao orderItemDao;   // 专门处理OrderItem表操作
     private final AuthService authService;
     private final CartItemDao cartItemDao;
     private final BookDao bookDao;
     private final UserDao userDao;
 
-    public OrderServiceImpl(OrderDao orderDao, AuthService authService, CartItemDao cartItemDao, BookDao bookDao, UserDao userDao) {
+    @Autowired
+    public OrderServiceImpl(OrderDao orderDao, OrderItemDao orderItemDao, AuthService authService, 
+                           CartItemDao cartItemDao, BookDao bookDao, UserDao userDao) {
         this.orderDao = orderDao;
+        this.orderItemDao = orderItemDao;
         this.authService = authService;
         this.cartItemDao = cartItemDao;
         this.bookDao = bookDao;
         this.userDao = userDao;
     }
-
 
     private User getCurrentUserEntity() {
         User user = authService.getCurrentAuthenticatedUser();
@@ -148,70 +150,72 @@ public class OrderServiceImpl implements OrderService {
         if (requestDto.getItems() == null || requestDto.getItems().isEmpty()) {
             throw new IllegalArgumentException("订单中必须至少选择一件商品。");
         }
-        
+
+        BigDecimal totalOrderAmount = BigDecimal.ZERO;
+        List<Long> orderedBookIds = new ArrayList<>();
+        List<OrderItem> itemsToPersist = new ArrayList<>();
+
+        // 1) 先校验与构造订单项
+        for (OrderItemRequestDto itemRequest : requestDto.getItems()) {
+            Book book = bookDao.findById(itemRequest.getBookId())
+                    .orElseThrow(() -> new ResourceNotFoundException("创建订单失败：选择的书籍ID " + itemRequest.getBookId() + " 未找到。"));
+
+            if (!book.getIsAvailable()) {
+                throw new RuntimeException("无法下单已下架的书籍《" + book.getTitle() + "》。");
+            }
+            if (book.getStockQuantity() <= 0) {
+                throw new InsufficientStockException("书籍《" + book.getTitle() + "》已售罄，无法完成下单。");
+            }
+            if (book.getStockQuantity() < itemRequest.getQuantity()) {
+                throw new InsufficientStockException(
+                        String.format("书籍《%s》库存不足，您选择了 %d 件，但库存仅剩 %d 件，无法完成下单。",
+                                book.getTitle(), itemRequest.getQuantity(), book.getStockQuantity()));
+            }
+            if (itemRequest.getQuantity() <= 0) {
+                throw new IllegalArgumentException("商品数量必须大于0。");
+            }
+
+            OrderItem orderItem = new OrderItem();
+            orderItem.setBook(book);
+            orderItem.setQuantity(itemRequest.getQuantity());
+            orderItem.setPriceAtPurchase(book.getPrice());
+
+            BigDecimal subtotal = orderItem.getSubtotal();
+            totalOrderAmount = totalOrderAmount.add(subtotal);
+            orderedBookIds.add(book.getId());
+            itemsToPersist.add(orderItem);
+
+            logger.info("Prepared order item for book '{}': quantity={}, price={}, subtotal={}",
+                    book.getTitle(), itemRequest.getQuantity(), book.getPrice(), subtotal);
+        }
+
+        // 2) 保存订单（调用 OrderDao）
         Order newOrder = new Order();
         newOrder.setUser(currentUser);
         newOrder.setShippingAddress(requestDto.getShippingAddress());
         newOrder.setContactPhone(requestDto.getContactPhone());
         newOrder.setStatus("PENDING_PAYMENT");
         newOrder.setOrderDate(LocalDateTime.now());
-        BigDecimal totalOrderAmount = BigDecimal.ZERO;
-        List<Long> orderedBookIds = new ArrayList<>();
-
-        for (OrderItemRequestDto itemRequest : requestDto.getItems()) {
-            Book book = bookDao.findById(itemRequest.getBookId())
-                    .orElseThrow(() -> new ResourceNotFoundException("创建订单失败：选择的书籍ID " + itemRequest.getBookId() + " 未找到。"));
-            
-            // 检查书籍是否已下架
-            if (!book.getIsAvailable()) {
-                throw new RuntimeException("无法下单已下架的书籍《" + book.getTitle() + "》。");
-            }
-            
-            // 详细的库存检查逻辑
-            if (book.getStockQuantity() <= 0) {
-                throw new InsufficientStockException("书籍《" + book.getTitle() + "》已售罄，无法完成下单。");
-            }
-            
-            if (book.getStockQuantity() < itemRequest.getQuantity()) {
-                throw new InsufficientStockException(
-                    String.format("书籍《%s》库存不足，您选择了 %d 件，但库存仅剩 %d 件，无法完成下单。", 
-                        book.getTitle(), 
-                        itemRequest.getQuantity(), 
-                        book.getStockQuantity())
-                );
-            }
-            
-            // 验证数量的合理性
-            if (itemRequest.getQuantity() <= 0) {
-                throw new IllegalArgumentException("商品数量必须大于0。");
-            }
-            
-            OrderItem orderItem = new OrderItem();
-            orderItem.setBook(book);
-            orderItem.setQuantity(itemRequest.getQuantity());
-            orderItem.setPriceAtPurchase(book.getPrice());
-            newOrder.addOrderItem(orderItem);
-            
-            // 使用计算属性获取小计
-            BigDecimal subtotal = orderItem.getSubtotal();
-            totalOrderAmount = totalOrderAmount.add(subtotal);
-            orderedBookIds.add(book.getId());
-            
-            logger.info("Added book '{}' to order: quantity={}, price={}, subtotal={}", 
-                       book.getTitle(), itemRequest.getQuantity(), book.getPrice(), subtotal);
-        }
-        
         newOrder.setTotalAmount(totalOrderAmount);
+
         Order savedOrder = orderDao.save(newOrder);
-        
-        // 从购物车中移除已下单的商品
+
+        // 3) 关联订单项到已保存的订单并批量保存（调用 OrderItemDao）
+        for (OrderItem item : itemsToPersist) {
+            item.setOrder(savedOrder);
+        }
+        List<OrderItem> savedItems = orderItemDao.saveAll(itemsToPersist);
+
+        savedOrder.setOrderItems(new ArrayList<>(savedItems));
+
+        // 4) 清理购物车中已下单商品
         if (!orderedBookIds.isEmpty()) {
             cartItemDao.deleteByUserIdAndBookIdIn(currentUser.getId(), orderedBookIds);
         }
-        
-        logger.info("Order created successfully with ID: {} for user: {}, total amount: {}", 
-                   savedOrder.getId(), currentUser.getUsername(), totalOrderAmount);
-        
+
+        logger.info("Order created successfully with ID: {} for user: {}, total amount: {} and {} items",
+                savedOrder.getId(), currentUser.getUsername(), totalOrderAmount, savedItems.size());
+
         return OrderResponseDto.fromEntity(savedOrder);
     }
 
