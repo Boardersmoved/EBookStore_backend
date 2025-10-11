@@ -10,9 +10,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        // 订阅前缀：客户端只能订阅 /topic 开头的目的地
-        config.enableSimpleBroker("/topic");
-        // 应用消息前缀
+        // 启用简单消息代理，支持 /topic（广播）和 /queue（点对点）
+        config.enableSimpleBroker("/topic", "/queue");
+        
+        // 设置用户目标前缀（用于 convertAndSendToUser）
+        config.setUserDestinationPrefix("/user");
+        
+        // 应用消息前缀（客户端发送消息时使用）
         config.setApplicationDestinationPrefixes("/app");
     }
 

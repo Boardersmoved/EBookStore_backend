@@ -45,7 +45,7 @@ public class Order {
     @Column(name = "contact_phone", length = 20)
     private String contactPhone;
 
-    @OneToMany(mappedBy = "order", cascade = {CascadeType.PERSIST, CascadeType.MERGE}, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "order", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, fetch = FetchType.LAZY)
     private List<OrderItem> orderItems = new ArrayList<>();
 
     // 辅助方法添加订单项
