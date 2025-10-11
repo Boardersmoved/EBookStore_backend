@@ -60,9 +60,8 @@ public class OrderController {
             // 生成唯一的消息ID
             String messageId = UUID.randomUUID().toString();
             
-            // 创建Kafka消息包装
+            // 创建Kafka消息包装（messageId 通过 Kafka key 传递，不在 DTO 中冗余存储）
             OrderRequestMessageDto kafkaMessage = new OrderRequestMessageDto(
-                messageId,
                 currentUsername,
                 LocalDateTime.now(),
                 createOrderRequestDto  // 直接使用现有的DTO

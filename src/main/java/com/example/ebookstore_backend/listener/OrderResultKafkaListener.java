@@ -33,7 +33,6 @@ public class OrderResultKafkaListener {
         try {
             OrderResultMessageDto result = objectMapper.readValue(messageValue, OrderResultMessageDto.class);
 
-            // 推送到以 messageId 为路由键的主题，前端按 messageId 订阅
             messagingTemplate.convertAndSendToUser(
                 result.getUsername(),
                 "/queue/order-results",

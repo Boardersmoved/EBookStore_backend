@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderRequestMessageDto {
-    private String messageId;
     private String username;
     
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
