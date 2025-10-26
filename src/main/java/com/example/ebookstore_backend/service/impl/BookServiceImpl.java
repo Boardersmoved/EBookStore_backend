@@ -58,8 +58,8 @@ public class BookServiceImpl implements BookService {
             if (StringUtils.hasText(tagName)) {
                 Join<Book, Tag> tagJoin = root.join("tags");
                 predicates.add(criteriaBuilder.equal(tagJoin.get("name"), tagName));
+                query.distinct(true); 
             }
-            query.distinct(true);
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
 
@@ -85,8 +85,8 @@ public class BookServiceImpl implements BookService {
             if (StringUtils.hasText(tagName)) {
                 Join<Book, Tag> tagJoin = root.join("tags");
                 predicates.add(criteriaBuilder.equal(tagJoin.get("name"), tagName));
+                query.distinct(true); 
             }
-            query.distinct(true);
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
 

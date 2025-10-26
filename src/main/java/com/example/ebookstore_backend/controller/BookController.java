@@ -30,8 +30,12 @@ public class BookController {
             @RequestParam(name = "sortBy", defaultValue = "id") String sortBy, // 排序字段，默认按id
             @RequestParam(name = "sortDir", defaultValue = "asc") String sortDir // 排序方向，asc或desc
     ) {
+        String actualSortBy = sortBy;
+        if ("sales".equals(sortBy)) {
+            actualSortBy = "bookSales.totalSales";
+        }
         Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, actualSortBy));
         Page<BookDto> bookPage = bookService.getAllBooks(pageable, tagName, keyword);
         return ResponseEntity.ok(bookPage);
     }
@@ -45,8 +49,12 @@ public class BookController {
             @RequestParam(name = "sortBy", defaultValue = "id") String sortBy, // 排序字段，默认按id
             @RequestParam(name = "sortDir", defaultValue = "asc") String sortDir // 排序方向，asc或desc
     ) {
+        String actualSortBy = sortBy;
+        if ("sales".equals(sortBy)) {
+            actualSortBy = "bookSales.totalSales";
+        }
         Sort.Direction direction = sortDir.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, actualSortBy));
         Page<BookDto> bookPage = bookService.getBooks(pageable, tagName, keyword);
         return ResponseEntity.ok(bookPage);
     }
