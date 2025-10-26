@@ -6,6 +6,8 @@ import lombok.Setter;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.io.Serializable;  
+
 @Entity
 @Table(name = "cart_items",
         uniqueConstraints = { @UniqueConstraint(columnNames = {"user_id", "book_id"}) }) // 对应数据库的uk_user_book
@@ -13,7 +15,9 @@ import lombok.AllArgsConstructor;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class CartItem {
+public class CartItem implements Serializable {  
+
+    private static final long serialVersionUID = 1L;  
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

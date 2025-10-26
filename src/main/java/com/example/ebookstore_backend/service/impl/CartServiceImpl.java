@@ -5,11 +5,17 @@ import com.example.ebookstore_backend.entity.CartItem;
 import com.example.ebookstore_backend.entity.User;
 import com.example.ebookstore_backend.dto.AddCartItemRequestDto;
 import com.example.ebookstore_backend.dto.CartItemDto;
-import com.example.ebookstore_backend.exception.ResourceNotFoundException; // 需要创建此异常
+import com.example.ebookstore_backend.exception.ResourceNotFoundException;
 import com.example.ebookstore_backend.dao.BookDao;
 import com.example.ebookstore_backend.dao.CartItemDao;
-import com.example.ebookstore_backend.service.AuthService; // 用于获取当前用户
+import com.example.ebookstore_backend.service.AuthService;
 import com.example.ebookstore_backend.service.CartService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,22 +26,25 @@ import java.util.stream.Collectors;
 @Service
 public class CartServiceImpl implements CartService {
 
+    private static final Logger logger = LoggerFactory.getLogger(CartServiceImpl.class);
+
     private final CartItemDao cartItemDao;
     private final BookDao bookDao;
-    private final AuthService authService; // 用于获取当前登录用户
+    private final AuthService authService;
+    private final CartServiceImpl self;
 
-    public CartServiceImpl(CartItemDao cartItemDao, BookDao bookDao, AuthService authService) {
+    @Autowired
+    public CartServiceImpl(CartItemDao cartItemDao, BookDao bookDao, AuthService authService,
+                          @Lazy CartServiceImpl self) {
         this.cartItemDao = cartItemDao;
         this.bookDao = bookDao;
         this.authService = authService;
+        this.self = self;
     }
-
 
     private User getCurrentUser() {
         User user = authService.getCurrentAuthenticatedUser();
         if (user == null) {
-            // 这个异常应该由Spring Security的未认证访问处理机制捕获，
-            // 但作为服务层防御性编程，可以抛出。
             throw new IllegalStateException("用户未登录，无法执行购物车操作。");
         }
         return user;
@@ -45,20 +54,33 @@ public class CartServiceImpl implements CartService {
     @Transactional(readOnly = true)
     public List<CartItemDto> getCartItems() {
         User currentUser = getCurrentUser();
-        return cartItemDao.findByUserId(currentUser.getId())
+        logger.info("【查询购物车】User ID: {}", currentUser.getId());
+        return self.getCartItemsWithCache(currentUser.getId());
+    }
+
+    @Cacheable(value = "cart", key = "#userId", unless = "#result == null || #result.isEmpty()")
+    public List<CartItemDto> getCartItemsWithCache(Long userId) {
+        logger.info("缓存未命中：从数据库查询购物车 - User ID: {}", userId);
+
+        List<CartItemDto> cartItems = cartItemDao.findByUserId(userId)
                 .stream()
                 .map(CartItemDto::fromEntity)
                 .collect(Collectors.toList());
+
+        logger.info("写入购物车缓存 - User ID: {}, 商品数: {}", userId, cartItems.size());
+        return cartItems;
     }
 
     @Override
     @Transactional
     public CartItemDto addItemToCart(AddCartItemRequestDto addRequest) {
         User currentUser = getCurrentUser();
+        logger.info("【添加商品到购物车】User ID: {}, Book ID: {}, Quantity: {}",
+                currentUser.getId(), addRequest.getBookId(), addRequest.getQuantity());
+
         Book book = bookDao.findById(addRequest.getBookId())
                 .orElseThrow(() -> new ResourceNotFoundException("无法将书籍加入购物车：未找到ID为 " + addRequest.getBookId() + " 的书籍。"));
 
-        // 检查库存 (可选，但推荐)
         if (book.getStockQuantity() < addRequest.getQuantity()) {
             throw new RuntimeException("库存不足，无法添加 " + addRequest.getQuantity() + " 件《" + book.getTitle() + "》到购物车。");
         }
@@ -67,7 +89,6 @@ public class CartServiceImpl implements CartService {
 
         CartItem cartItemToSave;
         if (existingCartItemOpt.isPresent()) {
-            // 商品已在购物车，更新数量
             cartItemToSave = existingCartItemOpt.get();
             int newQuantity = cartItemToSave.getQuantity() + addRequest.getQuantity();
             if (book.getStockQuantity() < newQuantity) {
@@ -75,22 +96,28 @@ public class CartServiceImpl implements CartService {
             }
             cartItemToSave.setQuantity(newQuantity);
         } else {
-            // 商品不在购物车，新增
             cartItemToSave = new CartItem(currentUser, book, addRequest.getQuantity());
         }
+
         CartItem savedCartItem = cartItemDao.save(cartItemToSave);
+        logger.info("添加成功并清除购物车缓存 - User ID: {}", currentUser.getId());
+        self.evictCartCache(currentUser.getId());
+
         return CartItemDto.fromEntity(savedCartItem);
     }
 
     @Override
     @Transactional
     public CartItemDto updateCartItemQuantity(Long bookId, Integer quantity) {
-        if (quantity <= 0) {
-            // 如果数量小于等于0，则视为删除该项
-            removeItemFromCart(bookId);
-            return null; // 或者返回一个表示已删除的特定DTO/消息
-        }
         User currentUser = getCurrentUser();
+        logger.info("【更新购物车商品数量】User ID: {}, Book ID: {}, New Quantity: {}",
+                currentUser.getId(), bookId, quantity);
+
+        if (quantity <= 0) {
+            removeItemFromCart(bookId);
+            return null;
+        }
+
         Book book = bookDao.findById(bookId)
                 .orElseThrow(() -> new ResourceNotFoundException("更新购物车失败：未找到ID为 " + bookId + " 的书籍。"));
 
@@ -103,6 +130,10 @@ public class CartServiceImpl implements CartService {
 
         cartItem.setQuantity(quantity);
         CartItem updatedCartItem = cartItemDao.save(cartItem);
+
+        logger.info("更新成功并清除购物车缓存 - User ID: {}", currentUser.getId());
+        self.evictCartCache(currentUser.getId());
+
         return CartItemDto.fromEntity(updatedCartItem);
     }
 
@@ -110,7 +141,8 @@ public class CartServiceImpl implements CartService {
     @Transactional
     public void removeItemFromCart(Long bookId) {
         User currentUser = getCurrentUser();
-        // 先校验书籍是否存在，以及是否在用户购物车中，防止无效删除
+        logger.info("【从购物车删除商品】User ID: {}, Book ID: {}", currentUser.getId(), bookId);
+
         if (!bookDao.existsById(bookId)) {
             throw new ResourceNotFoundException("从购物车移除失败：未找到ID为 " + bookId + " 的书籍。");
         }
@@ -118,12 +150,24 @@ public class CartServiceImpl implements CartService {
                 .orElseThrow(() -> new ResourceNotFoundException("从购物车移除失败：该商品不在您的购物车中。"));
 
         cartItemDao.deleteByUserIdAndBookId(currentUser.getId(), bookId);
+
+        logger.info("删除成功并清除购物车缓存 - User ID: {}", currentUser.getId());
+        self.evictCartCache(currentUser.getId());
     }
 
     @Override
     @Transactional
     public void clearCart() {
         User currentUser = getCurrentUser();
+        logger.info("【清空购物车】User ID: {}", currentUser.getId());
+
         cartItemDao.deleteByUserId(currentUser.getId());
+
+        logger.info("清空成功并清除购物车缓存 - User ID: {}", currentUser.getId());
+        self.evictCartCache(currentUser.getId());
+    }
+
+    @CacheEvict(value = "cart", key = "#userId")
+    public void evictCartCache(Long userId) {
     }
 }

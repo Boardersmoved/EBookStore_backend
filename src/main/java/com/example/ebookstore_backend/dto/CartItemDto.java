@@ -3,11 +3,15 @@ package com.example.ebookstore_backend.dto;
 import com.example.ebookstore_backend.entity.CartItem;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
+import java.io.Serializable;
 
 @Data
 @NoArgsConstructor
-public class CartItemDto {
+@AllArgsConstructor
+public class CartItemDto implements Serializable {
+    private static final long serialVersionUID = 1L;
     private Long id; // CartItem的ID
     private BookDto book; // 嵌套的书籍信息DTO
     private Integer quantity;

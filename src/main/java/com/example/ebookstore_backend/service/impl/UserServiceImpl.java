@@ -53,14 +53,11 @@ public class UserServiceImpl implements UserService {
     public UserProfileResponseDto getCurrentUserProfile() {
         User currentUser = getAuthenticatedUser();
         logger.info("【查询用户资料】Username: {}, ID: {}", currentUser.getUsername(), currentUser.getId());
-        
-        // 通过代理对象调用缓存方法
         return self.getUserProfileByIdWithCache(currentUser.getId());
     }
 
     /**
      * 带缓存的用户资料查询
-     * 必须通过 self 代理对象调用
      */
     @Cacheable(value = "userProfile", key = "#userId", unless = "#result == null")
     public UserProfileResponseDto getUserProfileByIdWithCache(Long userId) {

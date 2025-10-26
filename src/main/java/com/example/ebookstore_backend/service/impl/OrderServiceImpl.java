@@ -13,6 +13,7 @@ import com.example.ebookstore_backend.dao.BookDao;
 import com.example.ebookstore_backend.dao.CartItemDao;
 import com.example.ebookstore_backend.dao.OrderDao;
 import com.example.ebookstore_backend.service.AuthService;
+import com.example.ebookstore_backend.service.CartService;
 import com.example.ebookstore_backend.service.OrderService;
 import org.aspectj.weaver.ast.Or;
 import org.slf4j.Logger;
@@ -38,13 +39,15 @@ public class OrderServiceImpl implements OrderService {
     private final CartItemDao cartItemDao;
     private final BookDao bookDao;
     private final UserDao userDao;
+    private final CartService cartService;
 
-    public OrderServiceImpl(OrderDao orderDao, AuthService authService, CartItemDao cartItemDao, BookDao bookDao, UserDao userDao) {
+    public OrderServiceImpl(OrderDao orderDao, AuthService authService, CartItemDao cartItemDao, BookDao bookDao, UserDao userDao, CartService cartService) {
         this.orderDao = orderDao;
         this.authService = authService;
         this.cartItemDao = cartItemDao;
         this.bookDao = bookDao;
         this.userDao = userDao;
+        this.cartService = cartService;
     }
 
 
@@ -207,6 +210,9 @@ public class OrderServiceImpl implements OrderService {
         // 从购物车中移除已下单的商品
         if (!orderedBookIds.isEmpty()) {
             cartItemDao.deleteByUserIdAndBookIdIn(currentUser.getId(), orderedBookIds);
+            cartService.evictCartCache(currentUser.getId());
+            logger.info("购物车商品已删除并清除缓存 - User ID: {}, 删除 {} 件商品", 
+                    currentUser.getId(), orderedBookIds.size());
         }
         
         logger.info("Order created successfully with ID: {} for user: {}, total amount: {}", 

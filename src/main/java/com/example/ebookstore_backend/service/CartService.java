@@ -38,4 +38,10 @@ public interface CartService {
      * 清空当前登录用户的购物车
      */
     void clearCart();
+
+    /**
+     * 清除指定用户的购物车缓存
+     * @param userId 用户ID
+     */
+    void evictCartCache(Long userId);  
 }
