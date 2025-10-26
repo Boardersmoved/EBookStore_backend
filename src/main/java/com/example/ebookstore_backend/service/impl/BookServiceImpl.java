@@ -3,13 +3,22 @@ package com.example.ebookstore_backend.service.impl;
 import com.example.ebookstore_backend.entity.Book;
 import com.example.ebookstore_backend.entity.Tag;
 import com.example.ebookstore_backend.dto.BookDto;
+import com.example.ebookstore_backend.dto.PageResult;
 import com.example.ebookstore_backend.dao.BookDao;
 import com.example.ebookstore_backend.service.BookService;
 import com.example.ebookstore_backend.service.TagService;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.context.annotation.Lazy; 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -24,17 +33,19 @@ import java.util.Set;
 @Service
 public class BookServiceImpl implements BookService {
 
+    private static final Logger logger = LoggerFactory.getLogger(BookServiceImpl.class);
+
     private final BookDao bookDao;
     private final TagService tagService;
+    private final BookServiceImpl self;
 
     @Autowired
-    public BookServiceImpl(BookDao bookDao, TagService tagService) { // 修改构造函数参数
+    public BookServiceImpl(BookDao bookDao, TagService tagService, @Lazy BookServiceImpl self) {
         this.bookDao = bookDao;
         this.tagService = tagService;
+        this.self = self;  
     }
 
-
-    // 将Book实体转换为BookDto
     private BookDto convertToDto(Book book) {
         return BookDto.fromEntity(book); 
     }
@@ -42,10 +53,55 @@ public class BookServiceImpl implements BookService {
     @Override
     @Transactional(readOnly = true)
     public Page<BookDto> getAllBooks(Pageable pageable, String tagName, String keyword) {
+        logger.info("【查询图书列表】Page: {}, Size: {}, Sort: {}, Tag: {}, Keyword: {}", 
+                pageable.getPageNumber(), 
+                pageable.getPageSize(),
+                pageable.getSort(),
+                tagName, 
+                keyword);
+        
+        // 无过滤条件的查询使用缓存
+        if (tagName == null && keyword == null) {
+            PageResult<BookDto> pageResult = self.queryBooksWithCache(pageable);
+            return new PageImpl<>(
+                pageResult.getContent(), 
+                pageable, 
+                pageResult.getTotalElements()
+            );
+        }
+        
+        // 有过滤条件的查询直接查数据库
+        return queryBooksFromDatabase(pageable, tagName, keyword);
+    }
+
+    /**
+     * 带缓存的查询方法
+     */
+    @Cacheable(
+        value = "bookList",
+        key = "'page-' + #pageable.pageNumber + '-size-' + #pageable.pageSize + '-sort-' + #pageable.sort.toString()",
+        unless = "#result == null"
+    )
+    public PageResult<BookDto> queryBooksWithCache(Pageable pageable) {
+        logger.info("缓存未命中：从数据库查询 - 参数: page={}, size={}, sort={}", 
+                pageable.getPageNumber(), 
+                pageable.getPageSize(),
+                pageable.getSort());
+        
+        Page<BookDto> page = queryBooksFromDatabase(pageable, null, null);
+        PageResult<BookDto> result = PageResult.from(page);
+        
+        logger.info("写入缓存 key: page-{}-size-{}-sort-{}", 
+                pageable.getPageNumber(), 
+                pageable.getPageSize(),
+                pageable.getSort());
+        
+        return result;
+    }
+
+    private Page<BookDto> queryBooksFromDatabase(Pageable pageable, String tagName, String keyword) {
         Specification<Book> spec = (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
-
-            // 只显示上架的书籍
             predicates.add(criteriaBuilder.isTrue(root.get("isAvailable")));
 
             if (StringUtils.hasText(keyword)) {
@@ -64,87 +120,115 @@ public class BookServiceImpl implements BookService {
         };
 
         Page<Book> bookPage = bookDao.findAll(spec, pageable);
-        // 将 Page<Book> 转换为 Page<BookDto>
-        return bookPage.map(this::convertToDto); 
+        Page<BookDto> result = bookPage.map(this::convertToDto);
+        
+        logger.info("数据库查询成功", 
+                result.getTotalElements(), 
+                result.getNumberOfElements());
+        
+        return result;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<BookDto> getBooks(Pageable pageable, String tagName, String keyword) {
-        Specification<Book> spec = (root, query, criteriaBuilder) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-
-            if (StringUtils.hasText(keyword)) {
-                String keywordPattern = "%" + keyword.toLowerCase() + "%";
-                Predicate titlePredicate = criteriaBuilder.like(criteriaBuilder.lower(root.get("title")), keywordPattern);
-                Predicate authorPredicate = criteriaBuilder.like(criteriaBuilder.lower(root.get("author")), keywordPattern);
-                predicates.add(criteriaBuilder.or(titlePredicate, authorPredicate));
-            }
-
-            if (StringUtils.hasText(tagName)) {
-                Join<Book, Tag> tagJoin = root.join("tags");
-                predicates.add(criteriaBuilder.equal(tagJoin.get("name"), tagName));
-                query.distinct(true); 
-            }
-            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
-        };
-
-        Page<Book> bookPage = bookDao.findAll(spec, pageable);
-        // 将 Page<Book> 转换为 Page<BookDto>
-        return bookPage.map(this::convertToDto); 
+        logger.info("管理员查询图书列表 Page: {}, Size: {}, Sort: {}, Tag: {}, Keyword: {}", 
+                pageable.getPageNumber(), 
+                pageable.getPageSize(),
+                pageable.getSort(),
+                tagName, 
+                keyword);
+        
+        // 管理员直接查数据库
+        return queryBooksFromDatabase(pageable, tagName, keyword);
     }
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "book", key = "#id", unless = "#result == null")
     public BookDto getBookById(Long id) {
+        logger.info("【缓存操作】查询图书详情 - ID: {}", id);
+        logger.info("【缓存未命中】从数据库查询图书 ID: {}", id);
+        
         Book book = bookDao.findById(id)
                 .orElseThrow(() -> new RuntimeException("Book not found with id: " + id));
-        return convertToDto(book);
+        
+        BookDto dto = convertToDto(book);
+        logger.info("【数据库查询成功】图书: {}, 库存: {}", dto.getTitle(), dto.getStockQuantity());
+        return dto;
     }
 
     @Override
     @Transactional
+    @Caching(
+        put = @CachePut(value = "book", key = "#result.id"),
+        evict = @CacheEvict(value = "bookList", allEntries = true)
+    )
     public BookDto createBook(BookDto bookDto) {
+        logger.info("【创建图书】标题: {}", bookDto.getTitle());
+        
         Book book = new Book();
         updateBookFromDto(book, bookDto);
         Book savedBook = bookDao.save(book);
+        
+        logger.info("【创建成功并清除列表缓存】图书ID: {}", savedBook.getId());
         return convertToDto(savedBook);
     }
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "book", key = "#bookDto.id"),
+        @CacheEvict(value = "bookList", allEntries = true)
+    })
     public BookDto updateBook(BookDto bookDto) {
+        logger.info("【更新图书】ID: {}", bookDto.getId());
+        
         Book book = bookDao.findById(bookDto.getId())
                 .orElseThrow(() -> new RuntimeException("Book not found with id: " + bookDto.getId()));
         updateBookFromDto(book, bookDto);
         Book updatedBook = bookDao.save(book);
+        
+        logger.info("【更新成功并清除所有缓存】图书ID: {}, 新标题: {}", bookDto.getId(), bookDto.getTitle());
         return convertToDto(updatedBook);
     }
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "book", key = "#id"),
+        @CacheEvict(value = "bookList", allEntries = true)
+    })
     public void deleteBook(Long id) {
+        logger.info("【软删除图书】ID: {}", id);
+        
         Book book = bookDao.findById(id)
                 .orElseThrow(() -> new RuntimeException("Book not found with id: " + id));
         
-        // 软删除：标记为下架
         book.setIsAvailable(false);
         bookDao.save(book);
+        
+        logger.info("【下架成功并清除所有缓存】图书ID: {}", id);
     }
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "book", key = "#id"),
+        @CacheEvict(value = "bookList", allEntries = true)
+    })
     public void restoreBook(Long id) {
+        logger.info("【恢复图书上架】ID: {}", id);
+        
         Book book = bookDao.findById(id)
                 .orElseThrow(() -> new RuntimeException("Book not found with id: " + id));
         
-        // 恢复上架
         book.setIsAvailable(true);
         bookDao.save(book);
+        
+        logger.info("【恢复成功并清除所有缓存】图书ID: {}", id);
     }
 
-    // 辅助方法：从DTO更新Book实体
     private void updateBookFromDto(Book book, BookDto bookDto) {
         book.setTitle(bookDto.getTitle());
         book.setAuthor(bookDto.getAuthor());
@@ -154,21 +238,16 @@ public class BookServiceImpl implements BookService {
         book.setStockQuantity(bookDto.getStockQuantity());
         book.setCoverImageBase64(bookDto.getCoverImageBase64());
 
-        // 处理上架状态
         if (bookDto.getIsAvailable() != null) {
             book.setIsAvailable(bookDto.getIsAvailable());
         } else {
-            // 新创建的书籍默认上架
             book.setIsAvailable(true);
         }
         
-        // 处理标签
         if (bookDto.getTags() != null && !bookDto.getTags().isEmpty()) {
-            // 使用TagService将标签名称转换为标签实体
             Set<Tag> tags = tagService.findOrCreateTags(bookDto.getTags());
             book.setTags(tags);
         } else {
-            // 如果没有标签，设置为空集合
             book.setTags(new HashSet<>());
         }
     }

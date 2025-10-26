@@ -6,6 +6,7 @@ import lombok.Setter;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.io.Serializable;  
 import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.Set;
@@ -16,7 +17,9 @@ import java.util.Set;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class Book {
+public class Book implements Serializable { 
+    
+    private static final long serialVersionUID = 1L; 
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -88,10 +91,3 @@ public class Book {
         bookInventory.setQuantity(quantity != null ? quantity : 0);
     }
 }
-//```
-//        * **`@Entity`**: 声明这是一个JPA实体。
-//        * **`@Table(name = "...")`**: 指定对应的数据库表名。
-//        * **`@Id` 和 `@GeneratedValue`**: 定义主键及其生成策略。
-//        * **`@Column`**: 定义字段与数据库列的映射，可以指定长度、是否可空等。
-//        * **`@ManyToMany`**: 定义多对多关系。`WorkspaceType.EAGER` 表示加载Book时会立即加载其关联的Tag。`@JoinTable` 配置了中间表。
-//        * **Lombok注解 (`@Getter`, `@Setter`, `@NoArgsConstructor`, `@AllArgsConstructor`)**: 自动生成相应的Java代码。

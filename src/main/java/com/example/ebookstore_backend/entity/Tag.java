@@ -6,13 +6,17 @@ import lombok.Setter;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.io.Serializable;  
+
 @Entity
 @Table(name = "tags")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class Tag {
+public class Tag implements Serializable {  
+
+    private static final long serialVersionUID = 1L;  
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

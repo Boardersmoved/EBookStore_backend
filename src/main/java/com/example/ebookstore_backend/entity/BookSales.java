@@ -6,13 +6,17 @@ import lombok.Setter;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.io.Serializable;  
+
 @Entity
 @Table(name = "book_sales")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class BookSales {
+public class BookSales implements Serializable {  
+
+    private static final long serialVersionUID = 1L;  
 
     @Id
     private Long bookId;

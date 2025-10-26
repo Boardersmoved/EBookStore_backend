@@ -5,6 +5,7 @@ import lombok.Data; // @Data combines @Getter, @Setter, @ToString, @EqualsAndHas
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.io.Serializable;  
 import java.math.BigDecimal;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -13,7 +14,10 @@ import com.example.ebookstore_backend.entity.Book;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class BookDto {
+public class BookDto implements Serializable {  
+    
+    private static final long serialVersionUID = 1L;  
+    
     private Long id;
     private String title;
     private String author;
