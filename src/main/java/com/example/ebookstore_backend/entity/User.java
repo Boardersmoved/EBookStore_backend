@@ -6,6 +6,7 @@ import lombok.Setter;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.io.Serializable;  
 import java.math.BigDecimal;
 
 @Entity
@@ -14,7 +15,9 @@ import java.math.BigDecimal;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+public class User implements Serializable {  
+
+    private static final long serialVersionUID = 1L; 
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -36,7 +39,7 @@ public class User {
     @Column(nullable = false, length = 20)
     private String role = "USER";
 
-    @Lob // 对于 TEXT 类型字段
+    @Lob
     @Column(columnDefinition = "TEXT")
     private String bio;
 
@@ -44,14 +47,13 @@ public class User {
     private String phone;
 
     @Column(nullable = false, precision = 10, scale = 2)
-    private BigDecimal balance = BigDecimal.ZERO; // 默认为0.00
+    private BigDecimal balance = BigDecimal.ZERO;
 
     @Column(name = "address_text", length = 500)
     private String addressText;
 
     @Column(nullable = false)
     private Boolean valid = true;
-
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private UserAuth userAuth;
@@ -60,8 +62,7 @@ public class User {
     public User(String username, String email) {
         this.username = username;
         this.email = email;
-        this.role = "USER"; // 确保默认角色
+        this.role = "USER";
         this.valid = true; 
     }
-
 }

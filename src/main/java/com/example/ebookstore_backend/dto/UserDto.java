@@ -2,10 +2,15 @@ package com.example.ebookstore_backend.dto;
 
 import com.example.ebookstore_backend.entity.User;
 import lombok.Data;
+
+import java.io.Serializable;  
 import java.math.BigDecimal;
 
 @Data
-public class UserDto {
+public class UserDto implements Serializable {  
+    
+    private static final long serialVersionUID = 1L;  
+    
     private Long id;
     private String username;
     private String email;
@@ -18,7 +23,6 @@ public class UserDto {
     private String addressText;
     private Boolean valid;
 
-    // 静态工厂方法，用于从 User 实体转换
     public static UserDto fromEntity(User user) {
         if (user == null) {
             return null;

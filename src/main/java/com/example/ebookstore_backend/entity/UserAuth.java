@@ -5,10 +5,8 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
-import java.time.LocalDateTime;
+import java.io.Serializable;  
 
 @Entity
 @Table(name = "user_auths")
@@ -16,21 +14,21 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserAuth {
+public class UserAuth implements Serializable {  
+
+    private static final long serialVersionUID = 1L;  
 
     @Id
     @Column(name = "user_id")
-    private Long userId; // 直接使用user_id作为主键
+    private Long userId;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", referencedColumnName = "id", insertable = false, updatable = false)
-    private User user; // 关联到User实体，但不控制外键
+    private User user;
 
     @Column(nullable = false, length = 255)
-    private String credential; // 加密后的密码
+    private String credential;
 
-    
-    // 构造函数
     public UserAuth(Long userId, String credential) {
         this.userId = userId;
         this.credential = credential;
