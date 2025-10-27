@@ -2,6 +2,8 @@ package com.example.ebookstore_backend.controller;
 
 import com.example.ebookstore_backend.dto.BookDto;
 import com.example.ebookstore_backend.service.BookService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -13,6 +15,8 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/books")
 public class BookController {
+
+    private static final Logger logger = LoggerFactory.getLogger(BookController.class);
 
     private final BookService bookService;
 
@@ -61,6 +65,7 @@ public class BookController {
 
     @GetMapping("/{id}")
     public ResponseEntity<BookDto> getBookById(@PathVariable Long id) {
+        logger.info("【Controller】接收查询图书请求 - 图书ID: {}", id);
         BookDto bookDto = bookService.getBookById(id);
         return ResponseEntity.ok(bookDto);
     }
