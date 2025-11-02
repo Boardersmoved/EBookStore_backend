@@ -49,11 +49,11 @@ public class Book implements Serializable {
     private Boolean isAvailable = true;
 
     // 一对一关系：Book 和 BookSales
-    @OneToOne(fetch = FetchType.EAGER, mappedBy = "book", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToOne(fetch = FetchType.LAZY, mappedBy = "book", cascade = CascadeType.ALL, orphanRemoval = true)
     private BookSales bookSales;
 
     // 一对一关系：Book 和 BookInventory
-    @OneToOne(fetch = FetchType.EAGER, mappedBy = "book", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToOne(fetch = FetchType.LAZY, mappedBy = "book", cascade = CascadeType.ALL, orphanRemoval = true)
     private BookInventory bookInventory;
 
     // 多对多关系: 一本书可以有多个标签

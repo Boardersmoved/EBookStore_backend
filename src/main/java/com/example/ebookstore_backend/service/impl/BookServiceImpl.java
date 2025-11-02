@@ -7,6 +7,8 @@ import com.example.ebookstore_backend.dto.PageResult;
 import com.example.ebookstore_backend.dao.BookDao;
 import com.example.ebookstore_backend.service.BookService;
 import com.example.ebookstore_backend.service.TagService;
+import com.example.ebookstore_backend.repository.BookInventoryRepository;
+import com.example.ebookstore_backend.dto.BookInfoDto;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import org.slf4j.Logger;
@@ -38,12 +40,17 @@ public class BookServiceImpl implements BookService {
     private final BookDao bookDao;
     private final TagService tagService;
     private final BookServiceImpl self;
+    private final BookInventoryRepository bookInventoryRepository;
 
     @Autowired
-    public BookServiceImpl(BookDao bookDao, TagService tagService, @Lazy BookServiceImpl self) {
+    public BookServiceImpl(BookDao bookDao, 
+                          TagService tagService, 
+                          @Lazy BookServiceImpl self,
+                          BookInventoryRepository bookInventoryRepository) {
         this.bookDao = bookDao;
         this.tagService = tagService;
-        this.self = self;  
+        this.self = self;
+        this.bookInventoryRepository = bookInventoryRepository;
     }
 
     private BookDto convertToDto(Book book) {
@@ -143,19 +150,46 @@ public class BookServiceImpl implements BookService {
         return queryBooksFromDatabase(pageable, tagName, keyword);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    @Cacheable(value = "book", key = "#id", unless = "#result == null")
-    public BookDto getBookById(Long id) {
-        logger.info("【缓存操作】查询图书详情 - ID: {}", id);
-        logger.info("【缓存未命中】从数据库查询图书 ID: {}", id);
+    /**
+     * 缓存图书基础信息（不含库存）
+     */
+    @Cacheable(value = "book_info", key = "#id", unless = "#result == null")
+    public BookInfoDto getBookInfoFromCache(Long id) {
+        logger.info("【基础信息缓存未命中】从数据库查询 Book ID: {}", id);
         
         Book book = bookDao.findById(id)
                 .orElseThrow(() -> new RuntimeException("Book not found with id: " + id));
         
-        BookDto dto = convertToDto(book);
-        logger.info("【数据库查询成功】图书: {}, 库存: {}", dto.getTitle(), dto.getStockQuantity());
-        return dto;
+        return BookInfoDto.fromEntity(book);
+    }
+    
+    /**
+     * 实时查询库存（不缓存）
+     */
+    public Integer getRealtimeStock(Long bookId) {
+        return bookInventoryRepository.findQuantityByBookId(bookId).orElse(0);
+    }
+    
+    /**
+     * 获取图书详情 - 组合缓存的基础信息 + 实时库存
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public BookDto getBookById(Long id) {
+        
+        // 1. 从缓存获取基础信息
+        BookInfoDto info = self.getBookInfoFromCache(id);
+        
+        // 2. 实时查询库存
+        Integer stock = getRealtimeStock(id);
+        
+        // 3. 查询销量
+        Book book = bookDao.findById(id).orElseThrow();
+        Integer sales = book.getSales();
+        
+        // 4. 组装成 BookDto
+        BookDto result = info.toBookDto(stock, sales);
+        return result;
     }
 
     @Override
