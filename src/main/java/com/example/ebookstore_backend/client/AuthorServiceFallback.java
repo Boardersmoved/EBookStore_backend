@@ -5,10 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-/**
- * Author Service 降级处理类
- * 当 Author Service 不可用时，返回友好的错误提示
- */
+
 @Component
 public class AuthorServiceFallback implements AuthorServiceClient {
     
