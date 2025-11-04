@@ -5,6 +5,8 @@ import com.example.ebookstore_backend.dto.CreateOrderRequestDto;
 import com.example.ebookstore_backend.dto.FlattenedOrderItemDto;
 import com.example.ebookstore_backend.dto.OrderItemRequestDto;
 import com.example.ebookstore_backend.dto.OrderResponseDto;
+import com.example.ebookstore_backend.dto.PriceCalculationRequest;
+import com.example.ebookstore_backend.dto.PriceCalculationResponse;
 import com.example.ebookstore_backend.exception.InsufficientStockException;
 import com.example.ebookstore_backend.exception.ResourceNotFoundException;
 import com.example.ebookstore_backend.exception.UnauthorizedOperationException;
@@ -12,6 +14,7 @@ import com.example.ebookstore_backend.dao.UserDao;
 import com.example.ebookstore_backend.dao.BookDao;
 import com.example.ebookstore_backend.dao.CartItemDao;
 import com.example.ebookstore_backend.dao.OrderDao;
+import com.example.ebookstore_backend.client.PriceCalculatorClient;
 import com.example.ebookstore_backend.service.AuthService;
 import com.example.ebookstore_backend.service.CartService;
 import com.example.ebookstore_backend.service.OrderService;
@@ -40,14 +43,16 @@ public class OrderServiceImpl implements OrderService {
     private final BookDao bookDao;
     private final UserDao userDao;
     private final CartService cartService;
+    private final PriceCalculatorClient priceCalculatorClient;
 
-    public OrderServiceImpl(OrderDao orderDao, AuthService authService, CartItemDao cartItemDao, BookDao bookDao, UserDao userDao, CartService cartService) {
+    public OrderServiceImpl(OrderDao orderDao, AuthService authService, CartItemDao cartItemDao, BookDao bookDao, UserDao userDao, CartService cartService, PriceCalculatorClient priceCalculatorClient) {
         this.orderDao = orderDao;
         this.authService = authService;
         this.cartItemDao = cartItemDao;
         this.bookDao = bookDao;
         this.userDao = userDao;
         this.cartService = cartService;
+        this.priceCalculatorClient = priceCalculatorClient;
     }
 
 
@@ -195,12 +200,18 @@ public class OrderServiceImpl implements OrderService {
             orderItem.setPriceAtPurchase(book.getPrice());
             newOrder.addOrderItem(orderItem);
             
-            // 使用计算属性获取小计
-            BigDecimal subtotal = orderItem.getSubtotal();
+            // 调用函数式服务计算小计
+            PriceCalculationRequest priceRequest = new PriceCalculationRequest(
+                book.getPrice(), 
+                itemRequest.getQuantity()
+            );
+            PriceCalculationResponse priceResponse = priceCalculatorClient.calculatePrice(priceRequest);
+            BigDecimal subtotal = priceResponse.getTotalPrice();
+            
             totalOrderAmount = totalOrderAmount.add(subtotal);
             orderedBookIds.add(book.getId());
             
-            logger.info("Added book '{}' to order: quantity={}, price={}, subtotal={}", 
+            logger.info("Added book '{}' to order: quantity={}, price={}, subtotal={} (calculated by price-calculator-service)", 
                        book.getTitle(), itemRequest.getQuantity(), book.getPrice(), subtotal);
         }
         
