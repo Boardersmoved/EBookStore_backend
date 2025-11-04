@@ -1,0 +1,57 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: author-service
+  
+  # 数据库配置 - 连接到同一个数据库
+  datasource:
+    url: jdbc:mysql://localhost:3306/ebookstore_v2?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: 1234
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: none  # 不自动创建表，使用已有的books表
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+
+# Eureka 客户端配置
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    # 启动时立即注册
+    initial-instance-info-replication-interval-seconds: 5
+  instance:
+    # 实例ID
+    instance-id: ${spring.application.name}:${server.port}
+    # 优先使用IP地址
+    prefer-ip-address: true
+    # 心跳间隔
+    lease-renewal-interval-in-seconds: 10
+    # 服务过期时间
+    lease-expiration-duration-in-seconds: 30
+
+# Actuator配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+# 日志配置
+logging:
+  level:
+    com.example.authorservice: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
