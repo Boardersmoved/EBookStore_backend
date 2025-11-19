@@ -40,3 +40,6 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Ignore this gitignore file itself (note: if already tracked, see instructions below)
+.gitignore
