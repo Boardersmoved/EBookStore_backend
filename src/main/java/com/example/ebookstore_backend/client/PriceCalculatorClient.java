@@ -13,7 +13,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 )
 public interface PriceCalculatorClient {
     
-    @PostMapping("/api/price/calculate")
+    // 修改为 Spring Cloud Function 自动暴露的端点
+    @PostMapping("/calculatePrice")
     PriceCalculationResponse calculatePrice(@RequestBody PriceCalculationRequest request);
 }
 

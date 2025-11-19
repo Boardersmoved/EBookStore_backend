@@ -25,7 +25,6 @@ public class SecurityConfig {
 
 
     // CORS 配置已移至 API Gateway 统一管理
-    // 在微服务架构中，CORS 应该在网关层处理，避免重复配置
     /*
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {

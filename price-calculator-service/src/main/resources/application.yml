@@ -4,6 +4,14 @@ server:
 spring:
   application:
     name: price-calculator-service
+  
+  # Spring Cloud Function 配置
+  cloud:
+    function:
+      definition: calculatePrice;calculatePriceReactive  # 定义可用的函数
+      web:
+        export:
+          enabled: true  # 启用 Web 端点导出
 
 eureka:
   client:
@@ -21,6 +29,7 @@ logging:
     file: UTF-8
   level:
     com.example.pricecalculatorservice: INFO
+    org.springframework.cloud.function: DEBUG  # 查看 Function 日志
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
 
