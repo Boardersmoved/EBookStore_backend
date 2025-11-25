@@ -6,6 +6,7 @@ import com.example.ebookstore_backend.dto.BookDto;
 import com.example.ebookstore_backend.dao.BookDao;
 import com.example.ebookstore_backend.service.BookService;
 import com.example.ebookstore_backend.service.TagService;
+import com.example.ebookstore_backend.service.TagGraphService;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,11 +27,13 @@ public class BookServiceImpl implements BookService {
 
     private final BookDao bookDao;
     private final TagService tagService;
+    private final TagGraphService tagGraphService;
 
     @Autowired
-    public BookServiceImpl(BookDao bookDao, TagService tagService) { // 修改构造函数参数
+    public BookServiceImpl(BookDao bookDao, TagService tagService, TagGraphService tagGraphService) {
         this.bookDao = bookDao;
         this.tagService = tagService;
+        this.tagGraphService = tagGraphService;
     }
 
 
@@ -56,8 +59,12 @@ public class BookServiceImpl implements BookService {
             }
 
             if (StringUtils.hasText(tagName)) {
+                // A. 利用 Neo4j 进行标签“膨胀”
+                List<String> searchTags = tagGraphService.getExpandedSearchTags(tagName);
+
+                // B. 在 MySQL 中使用 IN 查询
                 Join<Book, Tag> tagJoin = root.join("tags");
-                predicates.add(criteriaBuilder.equal(tagJoin.get("name"), tagName));
+                predicates.add(tagJoin.get("name").in(searchTags));
             }
             query.distinct(true);
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
@@ -83,8 +90,12 @@ public class BookServiceImpl implements BookService {
             }
 
             if (StringUtils.hasText(tagName)) {
+                // A. 利用 Neo4j 进行标签“膨胀”
+                List<String> searchTags = tagGraphService.getExpandedSearchTags(tagName);
+
+                // B. 在 MySQL 中使用 IN 查询
                 Join<Book, Tag> tagJoin = root.join("tags");
-                predicates.add(criteriaBuilder.equal(tagJoin.get("name"), tagName));
+                predicates.add(tagJoin.get("name").in(searchTags));
             }
             query.distinct(true);
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
