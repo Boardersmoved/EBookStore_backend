@@ -31,15 +31,13 @@ public class Book {
     @Column(name = "isbn", length = 20, unique = true)
     private String isbn;
     
-    @Lob
-    @Column(name = "cover_image_base64")
+    @Transient
     private String coverImageBase64;
 
     @Column(nullable = false, precision = 10, scale = 2) // 10位总精度，小数点后2位
     private BigDecimal price;
 
-    @Lob // 用于存储大文本对象
-    @Column(columnDefinition = "TEXT")
+    @Transient
     private String description;
 
     @Column(name = "sales", nullable = false, columnDefinition = "INT DEFAULT 0")

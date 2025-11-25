@@ -19,4 +19,6 @@ public interface BookDao {
     Book save(Book book);
 
     void deleteById(Long id);
+
+    void populateBookDetails(List<Book> books);
 }
