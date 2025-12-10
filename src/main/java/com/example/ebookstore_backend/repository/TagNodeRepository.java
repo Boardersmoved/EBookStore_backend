@@ -10,7 +10,10 @@ import java.util.List;
 public interface TagNodeRepository extends Neo4jRepository<TagNode, String> {
 
     // 查找与目标标签距离在 0 到 2 之间的所有相关标签名称
-    // (t)-[*0..2]-(related) 表示无向遍历，即父类和子类都会被查出来
-    @Query("MATCH (t:Tag {name: $tagName})-[*0..2]-(related:Tag) RETURN DISTINCT related.name")
+    // 使用路径过滤，确保遍历路径中的所有节点都不是"图书总库"
+    // 这样可以避免通过根节点关联到无关分类
+    @Query("MATCH path = (t:Tag {name: $tagName})-[*0..2]-(related:Tag) " +
+           "WHERE ALL(node IN nodes(path) WHERE node.name <> '图书总库') " +
+           "RETURN DISTINCT related.name")
     List<String> findRelatedTags(String tagName);
 }
