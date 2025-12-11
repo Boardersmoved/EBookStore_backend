@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 # 加载环境变量
 load_dotenv()
 
+# n8n 会自动注入这些参数，我们需要在函数签名中接收它们（虽然不使用）
+
 # 创建MCP服务器实例
 mcp = FastMCP("EBookStore")
 
@@ -51,12 +53,22 @@ def format_book(book: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @mcp.tool()
-def get_all_books(limit: int = 50) -> List[Dict[str, Any]]:
+def get_all_books(
+    limit: int = 50,
+    sessionId: Optional[str] = None,
+    action: Optional[str] = None,
+    chatInput: Optional[str] = None,
+    toolCallId: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """
     获取所有书籍列表
     
     Args:
         limit: 返回的最大书籍数量，默认50本
+        sessionId: n8n会话ID（自动注入，不影响业务逻辑）
+        action: n8n操作类型（自动注入，不影响业务逻辑）
+        chatInput: n8n聊天输入（自动注入，不影响业务逻辑）
+        toolCallId: n8n工具调用ID（自动注入，不影响业务逻辑）
         
     Returns:
         书籍列表
@@ -85,13 +97,24 @@ def get_all_books(limit: int = 50) -> List[Dict[str, Any]]:
 
 
 @mcp.tool()
-def search_books_by_title(title_query: str, limit: int = 20) -> List[Dict[str, Any]]:
+def search_books_by_title(
+    title_query: str,
+    limit: int = 20,
+    sessionId: Optional[str] = None,
+    action: Optional[str] = None,
+    chatInput: Optional[str] = None,
+    toolCallId: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """
     按书名搜索书籍（支持模糊查询）
     
     Args:
         title_query: 书名关键词
         limit: 返回的最大结果数量，默认20本
+        sessionId: n8n会话ID（自动注入，不影响业务逻辑）
+        action: n8n操作类型（自动注入，不影响业务逻辑）
+        chatInput: n8n聊天输入（自动注入，不影响业务逻辑）
+        toolCallId: n8n工具调用ID（自动注入，不影响业务逻辑）
         
     Returns:
         匹配的书籍列表
@@ -120,13 +143,24 @@ def search_books_by_title(title_query: str, limit: int = 20) -> List[Dict[str, A
 
 
 @mcp.tool()
-def search_books_by_author(author_query: str, limit: int = 20) -> List[Dict[str, Any]]:
+def search_books_by_author(
+    author_query: str,
+    limit: int = 20,
+    sessionId: Optional[str] = None,
+    action: Optional[str] = None,
+    chatInput: Optional[str] = None,
+    toolCallId: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """
     按作者搜索书籍（支持模糊查询）
     
     Args:
         author_query: 作者名关键词
         limit: 返回的最大结果数量，默认20本
+        sessionId: n8n会话ID（自动注入，不影响业务逻辑）
+        action: n8n操作类型（自动注入，不影响业务逻辑）
+        chatInput: n8n聊天输入（自动注入，不影响业务逻辑）
+        toolCallId: n8n工具调用ID（自动注入，不影响业务逻辑）
         
     Returns:
         匹配的书籍列表
@@ -158,12 +192,22 @@ def search_books_by_author(author_query: str, limit: int = 20) -> List[Dict[str,
 
 
 @mcp.tool()
-def get_top_selling_books(limit: int = 10) -> List[Dict[str, Any]]:
+def get_top_selling_books(
+    limit: int = 10,
+    sessionId: Optional[str] = None,
+    action: Optional[str] = None,
+    chatInput: Optional[str] = None,
+    toolCallId: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """
     获取销量最高的书籍
     
     Args:
         limit: 返回的书籍数量，默认10本
+        sessionId: n8n会话ID（自动注入，不影响业务逻辑）
+        action: n8n操作类型（自动注入，不影响业务逻辑）
+        chatInput: n8n聊天输入（自动注入，不影响业务逻辑）
+        toolCallId: n8n工具调用ID（自动注入，不影响业务逻辑）
         
     Returns:
         销量排行榜
