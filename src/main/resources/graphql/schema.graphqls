@@ -1,0 +1,29 @@
+type Book {
+    id: ID!
+    title: String!
+    author: String
+    isbn: String
+    coverImageBase64: String
+    price: Float!
+    description: String
+    sales: Int
+    stockQuantity: Int!
+    tags: [String]
+    isAvailable: Boolean
+}
+type PageInfo {
+    totalPages: Int!
+    totalElements: Int!
+    currentPage: Int!
+    pageSize: Int!
+    hasNext: Boolean!
+    hasPrevious: Boolean!
+}
+# 分页的书籍结果
+type BookPage {
+    content: [Book]!
+    pageInfo: PageInfo!
+}
+type Query {
+    searchBooksByName(name: String!, page: Int, size: Int): BookPage!
+}

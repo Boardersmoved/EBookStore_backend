@@ -46,6 +46,8 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         // 对所有 /api/ 开头的路径应用此CORS配置
         source.registerCorsConfiguration("/api/**", configuration);
+        // 为GraphQL端点添加CORS配置
+        source.registerCorsConfiguration("/graphql", configuration);
         return source;
     }
 
@@ -67,6 +69,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/profile/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/users").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/users/*/status").authenticated()
+                        // GraphQL 端点配置
+                        .requestMatchers("/graphql").authenticated()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session
