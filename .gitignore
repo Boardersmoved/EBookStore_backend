@@ -31,3 +31,14 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Docker ###
+# MySQL 数据持久化目录（包含数据库文件，不应提交到 Git）
+mysql-data/
+
+# Docker 备份文件（包含敏感数据，不应提交到 Git）
+*.sql
+ebookstore_backup.sql
+
+# Docker 构建缓存
+.dockerignore
