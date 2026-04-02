@@ -67,6 +67,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/profile/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/users").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/users/*/status").authenticated()
+                        // MapReduce接口允许公开访问（用于测试和演示）
+                        .requestMatchers("/api/mapreduce/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session
